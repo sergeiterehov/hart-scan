@@ -1,14 +1,22 @@
 import processing.serial.*;
 
 Serial ard;
+// Data time offset
 float timeOffset;
 ArrayList<PVector> data;
+
+ArrayList<PVector> markers;
+
+// Offset for zero point
 float timePointer;
 float zoom;
 // Seconds per window
 float spw;
 
+// End of data times position
 float saveTimeEnd;
+// Mouse position in seconds
+float timeMousePointer;
 
 void setup() {
   //size(500, 300);
@@ -20,6 +28,7 @@ void setup() {
   timePointer = 0;
   
   data = new ArrayList();
+  markers = new ArrayList();
   
   thread("updateDataLoop");
 }
@@ -33,15 +42,23 @@ void updateDataLoop() {
 }
 
 void draw() {
+  if (timePointer > 0) {
+    timePointer = 0;
+  }
+
   if (spw <= 0.1f) {
     spw = 0.1f;
+  } else if (spw >= 3600.0f) {
+    spw = 3600.0f;
   }
 
   zoom = width / spw;
+  timeMousePointer = 1.0f * spw * mouseX / width - timePointer;
 
   clear();
   
   drawGrid();
+  drawMarkers();
   drawTimePointer();
   drawData();
   drawUI();
@@ -50,11 +67,7 @@ void draw() {
 void mouseWheel(MouseEvent event) {
   float e = event.getCount();
 
-  timePointer += 0.02f * e;
-
-  if (timePointer > 0) {
-    timePointer = 0;
-  }
+  timePointer += 0.02f * spw * e;
 }
 
 void keyPressed() {
@@ -91,6 +104,14 @@ void keyPressed() {
     }
   }
   
+  else if (key == 'm' || key == 'M') {
+    markers.add(new PVector(timeMousePointer, mouseY));
+  }
+  
+  else if (key == 'x' || key == 'X') {
+    markers.clear();
+  }
+  
   else if (key == 'q' || key == 'Q') {
     if (ard != null) {
       ard.stop();
@@ -99,11 +120,13 @@ void keyPressed() {
   }
 
   else if (key == '+' || key == '=') {
-    spw -= 0.5f;
+    spw /= 1.1f;
+    timePointer -= (timePointer + timeMousePointer) * 0.1f / 1.1;
   }
   
   else if (key == '-') {
-    spw += 0.5f;
+    spw *= 1.1f;
+    timePointer += (timePointer + timeMousePointer) * 0.1f;
   }
 }
 
@@ -111,7 +134,7 @@ void drawUI() {
   if (ard == null) {
     drawSelectDeviceUI();
   }
-  
+
   drawCursorUI();
 }
 
@@ -128,25 +151,25 @@ void drawSelectDeviceUI() {
 }
 
 void drawCursorUI() {
-  float timeMousePointer = 1.0f * spw * mouseX / width - timePointer;
-  float x = (timePointer + timeMousePointer) * zoom;
-
   stroke(100, 100, 255);
   line(
-    x, 0,
-    x, height
+    mouseX, 0,
+    mouseX, height
   );
   fill(255, 255, 255);
   textSize(30);
   textAlign(LEFT, BOTTOM);
   text(
-    String.format("%.2f сек.", timeMousePointer),
-    x + 20, mouseY
+    String.format(
+      "%." + (spw > 50 ? 1 : spw > 4 ? 2 : 3) + "f сек.",
+      timeMousePointer
+    ),
+    mouseX + 20, mouseY
   );
 }
 
 void drawGrid() {
-  stroke(40, 40, 40);
+  stroke(30, 30, 30);
 
   for (float i = 0; i <= 10; i++) {
     line(
@@ -155,16 +178,18 @@ void drawGrid() {
     );
   }
 
-  stroke(40, 40, 40);
-
-  for (float i = -10; i <= (spw + 1) * 10; i++) {
-    float offset = timePointer - int(timePointer);
-    float x = (offset + i / 10.0f) * zoom;
-
-    line(
-      x, 0,
-      x, height
-    );
+  if (spw <= 20) {
+    stroke(30, 30, 30);
+  
+    for (float i = -10; i <= (spw + 1) * 10; i++) {
+      float offset = timePointer - int(timePointer);
+      float x = (offset + i / 10.0f) * zoom;
+  
+      line(
+        x, 0,
+        x, height
+      );
+    }
   }
   
   stroke(80, 80, 80);
@@ -172,7 +197,9 @@ void drawGrid() {
   textAlign(LEFT, BOTTOM);
   textSize(14);
   
-  for (float i = -1; i <= spw + 1; i++) {
+  float dSecond = spw > 1000 ? 60 : spw > 200 ? 10 : 1;
+  
+  for (float i = -1; i <= spw + 1; i += dSecond) {
     float offset = timePointer - int(timePointer);
     float x = (offset + i) * zoom;
 
@@ -201,6 +228,26 @@ void drawTimePointer() {
     line(
       (timePointer + saveTimeEnd) * zoom, 0,
       (timePointer + saveTimeEnd) * zoom, height
+    );
+  }
+}
+
+void drawMarkers() {
+  stroke(150, 90, 30);
+  fill(150, 90, 30);
+  textSize(20);
+
+  for (int i = 0; i < markers.size(); i++) {
+    PVector marker = markers.get(i);
+    float x = (timePointer + marker.x) * zoom;
+
+    line(
+      x, 0,
+      x, height
+    );
+    text(
+      String.format("%.3f", marker.x),
+      x + 10, marker.y
     );
   }
 }
@@ -234,6 +281,7 @@ void resetData() {
   timePointer = -getTime();
 
   data.clear();
+  markers.clear();
 }
 
 void updateData() {
