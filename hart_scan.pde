@@ -18,7 +18,11 @@ float saveTimeEnd;
 // Mouse position in seconds
 float timeMousePointer;
 
+boolean isFollowCursor;
+
 void setup() {
+  frameRate(30);
+
   //size(500, 300);
   fullScreen();
   
@@ -30,7 +34,7 @@ void setup() {
   data = new ArrayList();
   markers = new ArrayList();
   
-  thread("updateDataLoop");
+  //thread("updateDataLoop");
 }
 
 void updateDataLoop() {
@@ -42,14 +46,18 @@ void updateDataLoop() {
 }
 
 void draw() {
-  if (timePointer > 0) {
-    timePointer = 0;
-  }
-
   if (spw <= 0.1f) {
     spw = 0.1f;
   } else if (spw >= 3600.0f) {
     spw = 3600.0f;
+  }
+
+  if (isFollowCursor) {
+    timePointer = - getTime() + 0.8 * spw;
+  }
+
+  if (timePointer > 0) {
+    timePointer = 0;
   }
 
   zoom = width / spw;
@@ -116,7 +124,13 @@ void keyPressed() {
     if (ard != null) {
       ard.stop();
       ard = null;
+      
+      isFollowCursor = false;
     }
+  }
+  
+  else if (key == 'f' || key == 'F') {
+    isFollowCursor = ! isFollowCursor;
   }
 
   else if (key == '+' || key == '=') {
@@ -128,6 +142,16 @@ void keyPressed() {
     spw *= 1.1f;
     timePointer += (timePointer + timeMousePointer) * 0.1f;
   }
+  
+  else if (key == CODED) {
+    if (keyCode == LEFT) {
+      timePointer += 0.8 * spw;
+    }
+    
+    else if (keyCode == RIGHT) {
+      timePointer -= 0.8 * spw;
+    }
+  }
 }
 
 void drawUI() {
@@ -136,6 +160,12 @@ void drawUI() {
   }
 
   drawCursorUI();
+}
+
+void serialEvent(Serial dev) {
+  if (dev == ard) {
+    updateData();
+  }
 }
 
 void drawSelectDeviceUI() {
@@ -266,13 +296,17 @@ void drawData() {
     }
 
     line(
-      (a.x + timePointer) * zoom, a.y * height,
-      (b.x + timePointer) * zoom, b.y * height
+      (a.x + timePointer) * zoom, (1 - a.y) * height,
+      (b.x + timePointer) * zoom, (1 - b.y) * height
     );
   }
 }
 
 float getTime() {
+  if (ard == null) {
+    return 0;
+  }
+
   return millis() / 1000.0f + timeOffset;
 }
 
