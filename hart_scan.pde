@@ -12,6 +12,7 @@ float timePointer;
 float zoom;
 // Seconds per window
 float spw;
+float smoothing;
 
 // End of data times position
 float saveTimeEnd;
@@ -23,7 +24,7 @@ boolean isFollowCursor;
 void setup() {
   frameRate(30);
 
-  //size(500, 300);
+  //size(950, 500);
   fullScreen();
   
   surface.setTitle("SergeiTerehov Hart Scan");
@@ -62,6 +63,12 @@ void draw() {
 
   zoom = width / spw;
   timeMousePointer = 1.0f * spw * mouseX / width - timePointer;
+  
+  if (smoothing < 0) {
+    smoothing = 0;
+  } else if (smoothing > 50) {
+    smoothing = 50;
+  }
 
   clear();
   
@@ -151,6 +158,14 @@ void keyPressed() {
     else if (keyCode == RIGHT) {
       timePointer -= 0.8 * spw;
     }
+    
+    else if (keyCode == UP) {
+      smoothing += 1;
+    }
+    
+    else if (keyCode == DOWN) {
+      smoothing -= 1;
+    }
   }
 }
 
@@ -172,11 +187,11 @@ void drawSelectDeviceUI() {
   String[] list = Serial.list();
 
   fill(130, 130, 130, data.size() > 0 ? 80 : 255);
-  textSize(30);
+  textSize(14);
   textAlign(LEFT, TOP);
   
   for (int i = 0; i < list.length; i++) {
-    text(String.format("[%d] %s", i, list[i]), 10, i * 30);
+    text(String.format("[%d] %s", i, list[i]), 10, i * 14);
   }
 }
 
@@ -224,7 +239,7 @@ void drawGrid() {
   
   stroke(80, 80, 80);
   fill(100, 100, 100);
-  textAlign(LEFT, BOTTOM);
+  textAlign(LEFT, TOP);
   textSize(14);
   
   float dSecond = spw > 1000 ? 60 : spw > 200 ? 10 : 1;
@@ -238,7 +253,7 @@ void drawGrid() {
       x, height
     );
     
-    text(int(-timePointer + i), x, height);
+    text(int(-timePointer + i), x, 0);
   }
 }
 
@@ -266,6 +281,7 @@ void drawMarkers() {
   stroke(150, 90, 30);
   fill(150, 90, 30);
   textSize(20);
+  textAlign(LEFT, CENTER);
 
   for (int i = 0; i < markers.size(); i++) {
     PVector marker = markers.get(i);
@@ -277,7 +293,7 @@ void drawMarkers() {
     );
     text(
       String.format("%.3f", marker.x),
-      x + 10, marker.y
+      x + 1, marker.y
     );
   }
 }
@@ -285,8 +301,14 @@ void drawMarkers() {
 void drawData() {
   stroke(255, 255, 255);
   
+  if (data.size() < 2) {
+    return;
+  }
+  
+  PVector prev = data.get(0);
+  
   for (int i = 1; i < data.size(); i++) {
-    PVector a = data.get(i - 1);
+    PVector a = prev;
     PVector b = data.get(i);
     
     float bPos = (b.x + timePointer) * zoom;
@@ -294,11 +316,21 @@ void drawData() {
     if (bPos < 0 || bPos > width) {
       continue;
     }
+    
+    if (abs(b.y - a.y) * height < 50 && (b.x - a.x) * zoom < 4) {
+      continue;
+    }
+    
+    if (abs(b.y - a.y) * height < smoothing) {
+      continue;
+    }
 
     line(
       (a.x + timePointer) * zoom, (1 - a.y) * height,
       (b.x + timePointer) * zoom, (1 - b.y) * height
     );
+    
+    prev = b;
   }
 }
 
